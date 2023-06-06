@@ -553,11 +553,11 @@ func (c Copy) doDownload(ctx context.Context, srcurl *url.URL, dsturl *url.URL) 
 func (c Copy) doUpload(ctx context.Context, srcurl *url.URL, dsturl *url.URL) error {
 	srcClient := storage.NewLocalClient(c.storageOpts)
 
-	file, err := srcClient.Open(srcurl.Absolute())
+	freader, err := srcClient.Reader(srcurl)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer freader.Close()
 
 	err = c.shouldOverride(ctx, srcurl, dsturl)
 	if err != nil {
@@ -588,14 +588,14 @@ func (c Copy) doUpload(ctx context.Context, srcurl *url.URL, dsturl *url.URL) er
 	if c.contentType != "" {
 		metadata.SetContentType(c.contentType)
 	} else {
-		metadata.SetContentType(guessContentType(file))
+		metadata.SetContentType(freader.ContentType())
 	}
 
 	if c.contentEncoding != "" {
 		metadata.SetContentEncoding(c.contentEncoding)
 	}
 
-	err = dstClient.Put(ctx, file, dsturl, metadata, c.concurrency, c.partSize)
+	err = dstClient.Put(ctx, freader, dsturl, metadata, c.concurrency, c.partSize)
 	if err != nil {
 		return err
 	}
@@ -605,7 +605,7 @@ func (c Copy) doUpload(ctx context.Context, srcurl *url.URL, dsturl *url.URL) er
 
 	if c.deleteSource {
 		// close the file before deleting
-		file.Close()
+		freader.Close()
 		if err := srcClient.Delete(ctx, srcurl); err != nil {
 			return err
 		}
